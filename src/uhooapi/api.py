@@ -32,7 +32,7 @@ class API:
         if method.lower() == "post":
             self._log.debug(f"[_request] {json_pp(data)}")
 
-        async with self._websession.request(
+        async with await self._websession.request(
             method, f"{scaffold}/{endpoint}", headers=headers, data=data
         ) as resp:
             json = None
