@@ -1,6 +1,6 @@
 [run]
 source = src/uhooapi
-omit = 
+omit =
     */tests/*
     */__pycache__/*
 

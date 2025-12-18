@@ -1,10 +1,7 @@
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 from aiohttp import ClientSession
-import aiohttp
-from datetime import datetime
-import json
 
 
 @pytest.fixture
@@ -34,7 +31,7 @@ def sample_device_data():
         "roomName": "Living Room",
         "timezone": "America/New_York",
         "utcOffset": "-05:00",
-        "ssid": "HomeWiFi"
+        "ssid": "HomeWiFi",
     }
 
 
@@ -66,7 +63,7 @@ def sample_sensor_data():
                 "so2": 0.002,
                 "nh3": 0.008,
                 "oxygen": 20.9,
-                "timestamp": 1704067200
+                "timestamp": 1704067200,
             },
             {
                 "virusIndex": 2.6,
@@ -91,8 +88,8 @@ def sample_sensor_data():
                 "so2": 0.0021,
                 "nh3": 0.0081,
                 "oxygen": 20.91,
-                "timestamp": 1704067260
-            }
+                "timestamp": 1704067260,
+            },
         ]
     }
 
@@ -104,7 +101,7 @@ def sample_token_response():
         "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
         "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
         "token_type": "Bearer",
-        "expires_in": 3600
+        "expires_in": 3600,
     }
 
 
@@ -120,7 +117,7 @@ def sample_device_list():
             "roomName": "Living Room",
             "timezone": "America/New_York",
             "utcOffset": "-05:00",
-            "ssid": "HomeWiFi"
+            "ssid": "HomeWiFi",
         },
         {
             "deviceName": "Bedroom",
@@ -130,6 +127,6 @@ def sample_device_list():
             "roomName": "Master Bedroom",
             "timezone": "America/New_York",
             "utcOffset": "-05:00",
-            "ssid": "HomeWiFi"
-        }
+            "ssid": "HomeWiFi",
+        },
     ]
