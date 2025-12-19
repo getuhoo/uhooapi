@@ -1,0 +1,61 @@
+name: Create Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'src/uhooapi/**'
+      - 'pyproject.toml'
+      - 'README.md'
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      new_version: ${{ steps.check.outputs.new_version }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Check for version bump
+      id: check
+      run: |
+        # Get current version from pyproject.toml
+        CURRENT_VERSION=$(python -c "import tomli; data = tomli.load(open('pyproject.toml', 'rb')); print(data['project']['version'])")
+
+        # Get previous version from git history
+        PREVIOUS_VERSION=$(git log -1 --grep="Bump version" --oneline 2>/dev/null | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "0.0.0")
+
+        echo "Current version: $CURRENT_VERSION"
+        echo "Previous version: $PREVIOUS_VERSION"
+
+        if [ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" ]; then
+          echo "should_release=true" >> $GITHUB_OUTPUT
+          echo "new_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+        else
+          echo "should_release=false" >> $GITHUB_OUTPUT
+        fi
+
+  create-release:
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: Release v${{ needs.check-version.outputs.new_version }}
+        tag_name: v${{ needs.check-version.outputs.new_version }}
+        generate_release_notes: true
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
