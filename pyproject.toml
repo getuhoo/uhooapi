@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "uhooapi"
-version = "1.0.0"
+version = "1.1.0"
 authors = [
   {name = "Joshua Monta", email = "joshsmonta@gmail.com"},
 ]
@@ -16,6 +16,8 @@ dependencies = [
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
