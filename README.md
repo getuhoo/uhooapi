@@ -58,22 +58,22 @@ async def main():
             websession=session,
             debug=True  # Enable debug logging
         )
-        
+
         # Authenticate and get token
         await client.login()
-        
+
         # Discover and set up your devices
         await client.setup_devices()
-        
+
         # Get all devices
         devices = client.get_devices()
         print(f"📱 Found {len(devices)} uHoo device(s)")
-        
+
         # Get latest data for the first device
         if devices:
             first_device_serial = list(devices.keys())[0]
             await client.get_latest_data(first_device_serial)
-            
+
             # Access the device data
             device = devices[first_device_serial]
             print(f"\n🏠 Device: {device.device_name}")
@@ -101,12 +101,12 @@ async def monitor_air_quality(api_key: str, update_interval: int = 300):
         client = Client(api_key=api_key, websession=session)
         await client.login()
         await client.setup_devices()
-        
+
         print("Starting air quality monitoring...")
         while True:
             for serial_number, device in client.get_devices().items():
                 await client.get_latest_data(serial_number)
-                
+
                 print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]")
                 print(f"Device: {device.device_name} ({device.room_name})")
                 print("-" * 40)
@@ -115,13 +115,13 @@ async def monitor_air_quality(api_key: str, update_interval: int = 300):
                 print(f"CO₂:         {device.co2:5.0f} ppm")
                 print(f"PM2.5:       {device.pm25:5.1f} µg/m³")
                 print(f"Virus Index: {device.virus_index:5.1f}")
-                
+
                 # Add alerts for poor air quality
                 if device.co2 > 1000:
                     print("⚠️  Warning: High CO₂ levels detected!")
                 if device.pm25 > 35:
                     print("⚠️  Warning: Elevated PM2.5 levels!")
-            
+
             await asyncio.sleep(update_interval)
 ```
 
@@ -135,17 +135,17 @@ async def fetch_with_retry(client: Client, serial_number: str, max_retries: int 
         try:
             await client.get_latest_data(serial_number)
             return True
-            
+
         except UnauthorizedError as e:
             print(f"❌ Authentication failed: {e}")
             # Re-authenticate and retry
             await client.login()
             continue
-            
+
         except ForbiddenError as e:
             print(f"🔒 Permission denied: {e}")
             return False
-            
+
         except RequestError as e:
             if attempt < max_retries - 1:
                 wait_time = 2 ** attempt  # Exponential backoff
@@ -155,7 +155,7 @@ async def fetch_with_retry(client: Client, serial_number: str, max_retries: int 
             else:
                 print(f"💥 Max retries exceeded: {e}")
                 return False
-                
+
     return False
 ```
 
@@ -167,28 +167,28 @@ async def get_environmental_summary(api_key: str):
         client = Client(api_key=api_key, websession=session)
         await client.login()
         await client.setup_devices()
-        
+
         devices = client.get_devices()
-        
+
         # Fetch data for all devices concurrently
         tasks = [
             client.get_latest_data(serial)
             for serial in devices.keys()
         ]
         await asyncio.gather(*tasks)
-        
+
         # Calculate averages
         temps = [d.temperature for d in devices.values()]
         humidities = [d.humidity for d in devices.values()]
         co2_levels = [d.co2 for d in devices.values()]
-        
+
         print("\n📊 Environmental Summary")
         print("=" * 40)
         print(f"Total Devices: {len(devices)}")
         print(f"Avg Temperature: {sum(temps)/len(temps):.1f}°C")
         print(f"Avg Humidity: {sum(humidities)/len(humidities):.1f}%")
         print(f"Avg CO₂: {sum(co2_levels)/len(co2_levels):.0f} ppm")
-        
+
         # Identify problem areas
         worst_co2 = max(devices.values(), key=lambda d: d.co2)
         if worst_co2.co2 > 800:
