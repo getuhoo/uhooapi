@@ -31,6 +31,19 @@ class Device:
         "oxygen",
     ]
 
+    # Add type hints for ALL sensor fields
+    virus_index: float
+    mold_index: float
+    temperature: float
+    humidity: float
+    pm25: float
+    tvoc: float
+    co2: float
+    co: float
+    air_pressure: float
+    ozone: float
+    no2: float
+
     def __init__(self, device: dict) -> None:
         """Initialize Device."""
         # Device info
@@ -53,6 +66,23 @@ class Device:
     def _to_attr_name(self, key: str) -> str:
         """Convert JSON-style keys to Python attributes (camelCase → snake_case)."""
         return re.sub(r"(?<!^)(?=[A-Z])", "_", key).lower()
+
+    @property
+    def as_dict(self) -> dict[str, float]:
+        """Return sensor data as dictionary."""
+        return {
+            "co": self.co,
+            "co2": self.co2,
+            "pm25": self.pm25,
+            "humidity": self.humidity,
+            "temperature": self.temperature,
+            "air_pressure": self.air_pressure,
+            "tvoc": self.tvoc,
+            "no2": self.no2,
+            "ozone": self.ozone,
+            "virus_index": self.virus_index,
+            "mold_index": self.mold_index,
+        }
 
     def update_device(self, device: dict) -> None:
         """Update method for device info."""
