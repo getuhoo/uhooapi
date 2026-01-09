@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "uhooapi"
-version = "1.2.1"
+version = "1.2.2"
 authors = [
   {name = "Joshua Monta", email = "joshsmonta@gmail.com"},
 ]
@@ -12,7 +12,7 @@ description = "A python client for uHoo APIs"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "aiohttp==3.13.2"
+    "aiohttp~=3.13.2"
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
