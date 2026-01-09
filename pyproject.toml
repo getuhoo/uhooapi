@@ -12,7 +12,7 @@ description = "A python client for uHoo APIs"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "aiohttp~=3.13.2"
+    "aiohttp>=3.13.2,<4.0"
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
