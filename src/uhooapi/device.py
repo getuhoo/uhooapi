@@ -55,6 +55,7 @@ class Device:
         self.timezone: str = ""
         self.utc_offset: str = ""
         self.ssid: str = ""
+        self.user_settings: dict[str, str] = {}
 
         # Sensor averages (initialized to 0.0)
         for field in self.SENSOR_FIELDS:
@@ -95,7 +96,7 @@ class Device:
         self.utc_offset = device.get("utcOffset", "")
         self.ssid = device.get("ssid", "")
 
-    def update_data(self, data_points: list) -> None:
+    def update_data(self, data_points: list, user_settings: dict[str, str]) -> None:
         """Update sensor data."""
         if not data_points:
             return  # No data to process
@@ -103,7 +104,6 @@ class Device:
         # Compute averages
         n = len(data_points)
         sums = dict.fromkeys(self.SENSOR_FIELDS, 0.0)
-
         for entry in data_points:
             for field in self.SENSOR_FIELDS:
                 value = entry.get(field)
@@ -117,3 +117,4 @@ class Device:
 
         # Optionally use the latest timestamp
         self.timestamp = data_points[-1].get("timestamp", -1)
+        self.user_settings = user_settings

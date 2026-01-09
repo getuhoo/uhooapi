@@ -96,8 +96,9 @@ class Client:
             )
         if data_latest is not None:
             data: list = data_latest["data"]
+            user_settings: dict[str, str] = data_latest["usersettings"]
         device_obj: Device = self.devices[serial_number]
-        device_obj.update_data(data)
+        device_obj.update_data(data, user_settings)
 
     def get_devices(self) -> dict[str, Device]:
         """Get the device list."""
