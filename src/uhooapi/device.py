@@ -55,7 +55,7 @@ class Device:
         self.timezone: str = ""
         self.utc_offset: str = ""
         self.ssid: str = ""
-        self.user_settings: dict[str, str] = {}
+        self.user_settings: dict[str, str] = {"temp": "c"}  # default to celsius
 
         # Sensor averages (initialized to 0.0)
         for field in self.SENSOR_FIELDS:
