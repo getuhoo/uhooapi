@@ -164,10 +164,6 @@ jobs:
     # For manual dispatch: depends on test-publish if not skipping test, otherwise only on test
     needs: test
     runs-on: ubuntu-latest
-    # Only run for releases OR manual dispatch with skip-test true
-    if: |
-      github.event_name == 'release' ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.skip-test == 'true')
 
     steps:
     - uses: actions/checkout@v4
