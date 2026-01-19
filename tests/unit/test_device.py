@@ -1,5 +1,20 @@
 from uhooapi.device import Device
 
+_USER_SETTINGS = {
+    "temperature": "°C",
+    "temp": "c",
+    "humidity": "%",
+    "pm25": "µg/m^3",
+    "dust": "µg/m^3",
+    "tvoc": "ppb",
+    "voc": "ppb",
+    "co2": "ppm",
+    "co": "ppm",
+    "airPressure": "mbar",
+    "ozone": "ppb",
+    "no2": "ppb",
+}
+
 
 class TestDeviceInitialization:
     """Test Device class initialization."""
@@ -109,7 +124,7 @@ class TestDeviceDataUpdate:
         # Store initial values
         initial_temp = device.temperature
 
-        device.update_data([])
+        device.update_data([], _USER_SETTINGS)
 
         # Values should remain unchanged
         assert device.temperature == initial_temp
@@ -122,7 +137,7 @@ class TestDeviceDataUpdate:
             {"temperature": 22.5, "humidity": 45.0, "co2": 800, "pm25": 12.3}
         ]
 
-        device.update_data(data_points)
+        device.update_data(data_points, _USER_SETTINGS)
 
         assert device.temperature == 22.5
         assert device.humidity == 45.0
@@ -139,7 +154,7 @@ class TestDeviceDataUpdate:
             {"temperature": 24.0, "humidity": 50.0, "co2": 800},
         ]
 
-        device.update_data(data_points)
+        device.update_data(data_points, _USER_SETTINGS)
 
         # Averages: temp = (20+22+24)/3 = 22.0, humidity = (40+45+50)/3 = 45.0
         assert device.temperature == 22.0
@@ -156,7 +171,7 @@ class TestDeviceDataUpdate:
             {"humidity": 50.0},  # Missing temperature
         ]
 
-        device.update_data(data_points)
+        device.update_data(data_points, _USER_SETTINGS)
 
         # Temperature: (20.0 + 22.0 + 0.0) / 3 = 14.0
         # Humidity: (40.0 + 0.0 + 50.0) / 3 = 30.0
@@ -173,7 +188,7 @@ class TestDeviceDataUpdate:
             {"temperature": 24.0, "timestamp": 3000},
         ]
 
-        device.update_data(data_points)
+        device.update_data(data_points, _USER_SETTINGS)
 
         assert device.timestamp == 3000
 
@@ -208,7 +223,7 @@ class TestDeviceDataUpdate:
             }
         ]
 
-        device.update_data(data_points)
+        device.update_data(data_points, _USER_SETTINGS)
 
         # Check a few fields
         assert device.virus_index == 2.5

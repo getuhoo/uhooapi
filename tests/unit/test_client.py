@@ -383,7 +383,23 @@ class TestClientGetLatestData:
     ):
         """Test get_latest_data with empty data points."""
         mock_api = AsyncMock()
-        mock_api.get_device_data.return_value = {"data": []}
+        mock_api.get_device_data.return_value = {
+            "data": [],
+            "usersettings": {
+                "temperature": "°C",
+                "temp": "c",
+                "humidity": "%",
+                "pm25": "µg/m^3",
+                "dust": "µg/m^3",
+                "tvoc": "ppb",
+                "voc": "ppb",
+                "co2": "ppm",
+                "co": "ppm",
+                "airPressure": "mbar",
+                "ozone": "ppb",
+                "no2": "ppb",
+            },
+        }
 
         with patch("uhooapi.client.API", return_value=mock_api):
             client = Client(api_key="test-api-key", websession=mock_websession)

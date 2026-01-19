@@ -90,7 +90,21 @@ def sample_sensor_data():
                 "oxygen": 20.91,
                 "timestamp": 1704067260,
             },
-        ]
+        ],
+        "usersettings": {
+            "temperature": "°C",
+            "temp": "c",
+            "humidity": "%",
+            "pm25": "µg/m^3",
+            "dust": "µg/m^3",
+            "tvoc": "ppb",
+            "voc": "ppb",
+            "co2": "ppm",
+            "co": "ppm",
+            "airPressure": "mbar",
+            "ozone": "ppb",
+            "no2": "ppb",
+        },
     }
 
 
