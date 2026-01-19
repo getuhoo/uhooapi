@@ -68,23 +68,6 @@ class Device:
         """Convert JSON-style keys to Python attributes (camelCase → snake_case)."""
         return re.sub(r"(?<!^)(?=[A-Z])", "_", key).lower()
 
-    @property
-    def as_dict(self) -> dict[str, float]:
-        """Return sensor data as dictionary."""
-        return {
-            "co": self.co,
-            "co2": self.co2,
-            "pm25": self.pm25,
-            "humidity": self.humidity,
-            "temperature": self.temperature,
-            "air_pressure": self.air_pressure,
-            "tvoc": self.tvoc,
-            "no2": self.no2,
-            "ozone": self.ozone,
-            "virus_index": self.virus_index,
-            "mold_index": self.mold_index,
-        }
-
     def update_device(self, device: dict) -> None:
         """Update method for device info."""
         self.device_name = device.get("deviceName", "")
