@@ -162,7 +162,7 @@ jobs:
   publish:
     # For releases: depends only on test
     # For manual dispatch: depends on test-publish if not skipping test, otherwise only on test
-    needs: [test, test-publish]
+    needs: test
     runs-on: ubuntu-latest
     # Only run for releases OR manual dispatch with skip-test true
     if: |
