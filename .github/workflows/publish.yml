@@ -3,14 +3,23 @@ name: Publish Python Package
 on:
   release:
     types: [published]
-  workflow_dispatch:  # For manual triggering
+  workflow_dispatch:
+    inputs:
+      skip-test:
+        description: 'Skip TestPyPI (for existing releases)'
+        required: false
+        default: 'false'
+      force:
+        description: 'Force clean build (delete dist/)'
+        required: false
+        default: 'false'
 
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.13", "3.14"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
       fail-fast: false
 
     steps:
@@ -38,8 +47,10 @@ jobs:
         file: ./coverage.xml
         fail_ci_if_error: false
 
-  publish:
-    needs: test-publish
+  test-publish:
+    needs: test
+    # Only run on manual dispatch and when not skipping test
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.skip-test == 'false'
     runs-on: ubuntu-latest
 
     steps:
@@ -47,282 +58,25 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Clean dist directory
+      run: |
+        echo "Cleaning previous builds..."
+        rm -rf dist/ build/ *.egg-info/
+        mkdir -p dist
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: "3.12"
-
-    - name: Install build tools and TOML parser
-      run: |
-        python -m pip install --upgrade pip
-        pip install build twine tomli
-
-    - name: Verify package structure
-      run: |
-        echo "Checking project structure..."
-        if [ ! -f "pyproject.toml" ]; then
-          echo "❌ ERROR: pyproject.toml not found!"
-          exit 1
-        fi
-        echo "✅ pyproject.toml found"
-
-        # List project structure
-        echo "Project structure:"
-        find . -type f -name "*.py" | head -20
-        echo "..."
-        ls -la
-
-    - name: Extract version from pyproject.toml
-      id: get_version
-      run: |
-        echo "Extracting version from pyproject.toml..."
-
-        # Method 1: Use tomli (Python module we just installed)
-        PYPROJECT_VERSION=$(python -c "
-        try:
-            import tomli
-            with open('pyproject.toml', 'rb') as f:
-                data = tomli.load(f)
-            version = data['project']['version']
-            print(version)
-        except Exception as e:
-            print(f'Error with tomli: {e}')
-            # Method 2: Use simple grep as fallback
-            import re
-            with open('pyproject.toml', 'r') as f:
-                content = f.read()
-            match = re.search(r'version\s*=\s*[\"\\']([^\"\\']+)[\"\\']', content)
-            if match:
-                print(match.group(1))
-            else:
-                # Method 3: Look for version line
-                with open('pyproject.toml', 'r') as f:
-                    for line in f:
-                        if 'version' in line and '=' in line:
-                            version = line.split('=')[1].strip().strip('\"').strip(\"'")
-                            print(version)
-                            break
-        ")
-
-        echo "Extracted version: $PYPROJECT_VERSION"
-        echo "version=$PYPROJECT_VERSION" >> $GITHUB_OUTPUT
-
-    - name: Check version against tag (for releases)
-      if: github.event_name == 'release'
-      run: |
-        echo "Checking version against release tag..."
-
-        # Get the extracted version
-        PYPROJECT_VERSION="${{ steps.get_version.outputs.version }}"
-
-        # Extract tag name (remove refs/tags/ and optional v prefix)
-        TAG_VERSION="${GITHUB_REF#refs/tags/}"
-        TAG_VERSION="${TAG_VERSION#v}"  # Remove leading 'v' if present
-
-        echo "PyProject Version: $PYPROJECT_VERSION"
-        echo "Tag Version: $TAG_VERSION"
-
-        if [ "$PYPROJECT_VERSION" != "$TAG_VERSION" ]; then
-          echo "❌ ERROR: Version mismatch!"
-          echo "  pyproject.toml: $PYPROJECT_VERSION"
-          echo "  Release tag:    $TAG_VERSION"
-          echo ""
-          echo "Make sure the version in pyproject.toml matches your GitHub release tag."
-          echo "Example: If your tag is v1.0.0, pyproject.toml should have version = \"1.0.0\""
-          exit 1
-        else
-          echo "✅ Version check passed"
-        fi
-
-    - name: Build package
-      run: |
-        echo "Building package..."
-        python -m build
-
-        echo "Built packages in dist/:"
-        ls -lh dist/
-
-        # Check what was built
-        echo "Package files:"
-        for file in dist/*; do
-          echo "  - $(basename $file) ($(du -h $file | cut -f1))"
-        done
-
-    - name: Check package with twine
-      run: |
-        echo "Checking package validity with twine..."
-        twine check dist/*
-
-    - name: Test local installation
-      run: |
-        echo "Testing local installation..."
-
-        # Find the wheel file
-        WHEEL_FILE=$(ls dist/*.whl 2>/dev/null | head -1)
-
-        if [ -z "$WHEEL_FILE" ]; then
-          echo "⚠️  No wheel file found, testing with source distribution"
-          # Try source distribution
-          pip install dist/*.tar.gz --force-reinstall --no-deps
-        else
-          echo "Installing wheel: $WHEEL_FILE"
-          pip install "$WHEEL_FILE" --force-reinstall --no-deps
-        fi
-
-        # Try to import the package
-        echo "Testing import..."
-        python -c "
-        try:
-            import uhooapi
-            print('✅ Successfully imported uhooapi')
-            # Try to get version from package
-            try:
-                print(f'   Package version: {uhooapi.__version__}')
-            except AttributeError:
-                # Try to get version from metadata
-                import importlib.metadata
-                try:
-                    version = importlib.metadata.version('uhooapi')
-                    print(f'   Package version (from metadata): {version}')
-                except:
-                    print('   Could not determine version')
-        except ImportError as e:
-            print(f'❌ Failed to import uhooapi: {e}')
-            print('Trying to find installed packages...')
-            import subprocess
-            result = subprocess.run(['pip', 'list'], capture_output=True, text=True)
-            print(result.stdout)
-            exit(1)
-        except Exception as e:
-            print(f'❌ Unexpected error: {e}')
-            exit(1)
-        "
-
-    - name: Publish to PyPI
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: |
-        echo "Publishing to PyPI..."
-
-        # Check if token is set
-        if [ -z "$TWINE_PASSWORD" ]; then
-          echo "❌ ERROR: PYPI_API_TOKEN secret is not set!"
-          echo ""
-          echo "To fix this:"
-          echo "1. Go to https://pypi.org/manage/account/token/"
-          echo "2. Generate an API token (with 'Upload packages' scope)"
-          echo "3. In your GitHub repo: Settings → Secrets and variables → Actions"
-          echo "4. Click 'New repository secret'"
-          echo "5. Name: PYPI_API_TOKEN"
-          echo "6. Value: pypi-YourTokenHere"
-          echo ""
-          exit 1
-        fi
-
-        # Upload to PyPI
-        echo "Uploading package to PyPI..."
-        twine upload dist/* --verbose
-
-        echo ""
-        echo "✅ Package published successfully!"
-
-        # Show published info
-        PACKAGE_NAME=$(python -c "
-        try:
-            import tomli
-            with open('pyproject.toml', 'rb') as f:
-                data = tomli.load(f)
-            print(data['project']['name'])
-        except:
-            # Fallback: extract from first line of pyproject.toml
-            import re
-            with open('pyproject.toml', 'r') as f:
-                content = f.read()
-            match = re.search(r'name\s*=\s*[\"\\']([^\"\\']+)[\"\\']', content)
-            if match:
-                print(match.group(1))
-            else:
-                print('unknown-package')
-        ")
-
-        VERSION="${{ steps.get_version.outputs.version }}"
-        echo "📦 Package: $PACKAGE_NAME"
-        echo "🏷️  Version: $VERSION"
-        echo "🔗 PyPI URL: https://pypi.org/project/$PACKAGE_NAME/$VERSION/"
-
-    - name: Verify publication (optional)
-      run: |
-        echo "Waiting for PyPI to update..."
-        sleep 10
-
-        PACKAGE_NAME=$(python -c "
-        try:
-            import tomli
-            with open('pyproject.toml', 'rb') as f:
-                data = tomli.load(f)
-            print(data['project']['name'])
-        except:
-            exit(0)  # Skip if we can't get name
-        ")
-
-        VERSION="${{ steps.get_version.outputs.version }}"
-
-        echo "Checking if $PACKAGE_NAME $VERSION is available on PyPI..."
-
-        # Try to check with curl (but don't fail if it doesn't work yet)
-        curl -s "https://pypi.org/pypi/$PACKAGE_NAME/$VERSION/json" > /tmp/pypi_check.json 2>/dev/null || true
-
-        if [ -s /tmp/pypi_check.json ]; then
-          echo "✅ Package is available on PyPI!"
-        else
-          echo "⚠️  Package may not be visible yet (can take a few minutes)"
-        fi
-
-  # Optional: Test publish to TestPyPI
-  test-publish:
-    needs: test
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.14"
 
     - name: Install build tools
       run: |
         python -m pip install --upgrade pip
         pip install build twine tomli
 
-    - name: Build package
+    - name: Extract package info
+      id: package_info
       run: |
-        python -m build
-
-    - name: Publish to TestPyPI
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
-      run: |
-        echo "Publishing to TestPyPI..."
-
-        if [ -z "$TWINE_PASSWORD" ]; then
-          echo "⚠️  TEST_PYPI_API_TOKEN not set, skipping TestPyPI publish"
-          echo ""
-          echo "To enable TestPyPI publishing:"
-          echo "1. Go to https://test.pypi.org/manage/account/token/"
-          echo "2. Generate an API token"
-          echo "3. Add it as TEST_PYPI_API_TOKEN in GitHub secrets"
-          exit 0
-        fi
-
-        echo "Uploading to TestPyPI..."
-        twine upload dist/* --repository-url https://test.pypi.org/legacy/ --verbose
-
-        # Extract package name
         PACKAGE_NAME=$(python -c "
         import tomli
         with open('pyproject.toml', 'rb') as f:
@@ -337,11 +91,250 @@ jobs:
         print(data['project']['version'])
         ")
 
+        echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Package: $PACKAGE_NAME"
+        echo "Version: $VERSION"
+
+    - name: Check if version exists on TestPyPI
+      id: check_testpypi
+      continue-on-error: true
+      run: |
+        echo "Checking if version exists on TestPyPI..."
+
+        PACKAGE_NAME="${{ steps.package_info.outputs.package_name }}"
+        VERSION="${{ steps.package_info.outputs.version }}"
+
+        if curl -s "https://test.pypi.org/pypi/$PACKAGE_NAME/$VERSION/json" > /dev/null 2>&1; then
+          echo "version_exists=true" >> $GITHUB_OUTPUT
+          echo "⚠️  Version $VERSION already exists on TestPyPI!"
+          echo "Skipping TestPyPI publish..."
+        else
+          echo "version_exists=false" >> $GITHUB_OUTPUT
+          echo "✅ Version $VERSION does not exist on TestPyPI"
+        fi
+
+    - name: Build package for TestPyPI
+      # Only build if version doesn't exist on TestPyPI
+      if: steps.check_testpypi.outputs.version_exists != 'true'
+      run: |
+        echo "Building package for TestPyPI..."
+        python -m build
+        echo "Built packages:"
+        ls -lh dist/
+
+    - name: Publish to TestPyPI
+      # Skip if version already exists
+      if: steps.check_testpypi.outputs.version_exists != 'true'
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
+      run: |
+        echo "Publishing to TestPyPI..."
+
+        if [ -z "$TWINE_PASSWORD" ]; then
+          echo "⚠️  TEST_PYPI_API_TOKEN not set"
+          echo ""
+          echo "To set up TestPyPI publishing:"
+          echo "1. Go to https://test.pypi.org/manage/account/token/"
+          echo "2. Generate an API token"
+          echo "3. Add as TEST_PYPI_API_TOKEN in GitHub secrets"
+          echo ""
+          echo "Skipping TestPyPI publish..."
+          exit 0
+        fi
+
+        echo "Uploading to TestPyPI..."
+        twine upload dist/* --repository-url https://test.pypi.org/legacy/ --verbose
+
+        PACKAGE_NAME="${{ steps.package_info.outputs.package_name }}"
+        VERSION="${{ steps.package_info.outputs.version }}"
+
         echo ""
-        echo "✅ Package published to TestPyPI!"
+        echo "✅ Successfully published to TestPyPI!"
         echo "📦 Package: $PACKAGE_NAME"
         echo "🏷️  Version: $VERSION"
-        echo "🔗 TestPyPI URL: https://test.pypi.org/project/$PACKAGE_NAME/$VERSION/"
+        echo "🔗 URL: https://test.pypi.org/project/$PACKAGE_NAME/$VERSION/"
         echo ""
         echo "To test installation:"
-        echo "pip install --index-url https://test.pypi.org/simple/ $PACKAGE_NAME==$VERSION"
+        echo "pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ $PACKAGE_NAME==$VERSION"
+
+  publish:
+    # For releases: depends only on test
+    # For manual dispatch: depends on test-publish if not skipping test, otherwise only on test
+    needs: [test, test-publish]
+    runs-on: ubuntu-latest
+    # Only run for releases OR manual dispatch with skip-test true
+    if: |
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.skip-test == 'true')
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Clean dist directory if forcing
+      if: github.event_name == 'workflow_dispatch' && github.event.inputs.force == 'true'
+      run: |
+        echo "Cleaning dist directory..."
+        rm -rf dist/ build/ *.egg-info/
+        mkdir -p dist
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install build tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine tomli
+
+    - name: Extract version from pyproject.toml
+      id: get_version
+      run: |
+        echo "Extracting version from pyproject.toml..."
+
+        # Use tomli to extract version (we installed it above)
+        PYPROJECT_VERSION=$(python -c "
+        import tomli
+        with open('pyproject.toml', 'rb') as f:
+            data = tomli.load(f)
+        print(data['project']['version'])
+                ")
+
+        # Also get package name
+        PACKAGE_NAME=$(python -c "
+        import tomli
+        with open('pyproject.toml', 'rb') as f:
+            data = tomli.load(f)
+        print(data['project']['name'])
+        ")
+
+        echo "version=$PYPROJECT_VERSION" >> $GITHUB_OUTPUT
+        echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+        echo "Extracted version: $PYPROJECT_VERSION"
+        echo "Package name: $PACKAGE_NAME"
+
+    - name: Check version against tag (for releases only)
+      if: github.event_name == 'release'
+      run: |
+        echo "Checking version against release tag..."
+
+        VERSION="${{ steps.get_version.outputs.version }}"
+
+        # Extract tag name (remove refs/tags/ and optional v prefix)
+        TAG_VERSION="${GITHUB_REF#refs/tags/}"
+        TAG_VERSION="${TAG_VERSION#v}"  # Remove leading 'v' if present
+
+        echo "PyProject Version: $VERSION"
+        echo "Tag Version: $TAG_VERSION"
+
+        if [ "$VERSION" != "$TAG_VERSION" ]; then
+          echo "❌ ERROR: Version mismatch!"
+          echo "  pyproject.toml: $VERSION"
+          echo "  Release tag:    $TAG_VERSION"
+          echo ""
+          echo "To fix:"
+          echo "1. Update version in pyproject.toml to match the tag"
+          echo "2. OR create a new tag that matches the version in pyproject.toml"
+          exit 1
+        else
+          echo "✅ Version check passed"
+        fi
+
+    - name: Check if version already exists on PyPI
+      id: check_pypi
+      continue-on-error: true
+      run: |
+        echo "Checking if this version already exists on PyPI..."
+
+        PACKAGE_NAME="${{ steps.get_version.outputs.package_name }}"
+        VERSION="${{ steps.get_version.outputs.version }}"
+
+        # Check if version exists
+        if curl -s "https://pypi.org/pypi/$PACKAGE_NAME/$VERSION/json" > /dev/null 2>&1; then
+          echo "version_exists=true" >> $GITHUB_OUTPUT
+          echo "⚠️  Version $VERSION already exists on PyPI!"
+
+          # For release events, this is an error
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            echo "❌ Cannot publish a release that already exists on PyPI"
+            echo "You must increment the version number in pyproject.toml"
+            exit 1
+          fi
+        else
+          echo "version_exists=false" >> $GITHUB_OUTPUT
+          echo "✅ Version $VERSION does not exist on PyPI"
+        fi
+
+    - name: Build package
+      # Only build if version doesn't exist OR we're forcing a rebuild
+      if: steps.check_pypi.outputs.version_exists != 'true' || github.event.inputs.force == 'true'
+      run: |
+        echo "Building package..."
+        python -m build
+
+        echo "Built packages:"
+        ls -lh dist/
+        echo ""
+        echo "Package info:"
+        for pkg in dist/*; do
+          echo "  $(basename $pkg)"
+        done
+
+    - name: Check package with twine
+      if: steps.check_pypi.outputs.version_exists != 'true' || github.event.inputs.force == 'true'
+      run: |
+        echo "Checking package with twine..."
+        twine check dist/*
+
+    - name: Publish to PyPI
+      # Only publish if version doesn't exist (unless force is true for manual dispatch)
+      if: |
+        (steps.check_pypi.outputs.version_exists != 'true') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.force == 'true')
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        echo "Publishing to PyPI..."
+
+        # Check if token is set
+        if [ -z "$TWINE_PASSWORD" ]; then
+          echo "❌ ERROR: PYPI_API_TOKEN secret is not set!"
+          echo ""
+          echo "Setup instructions:"
+          echo "1. Go to https://pypi.org/manage/account/token/"
+          echo "2. Generate an API token with 'Upload packages' scope"
+          echo "3. In GitHub repo: Settings → Secrets → Actions → New repository secret"
+          echo "4. Name: PYPI_API_TOKEN"
+          echo "5. Value: pypi-YourTokenHere"
+          exit 1
+        fi
+
+        # Upload with --skip-existing to avoid errors if somehow version exists
+        echo "Uploading package..."
+        twine upload dist/* --skip-existing --verbose
+
+        PACKAGE_NAME="${{ steps.get_version.outputs.package_name }}"
+        VERSION="${{ steps.get_version.outputs.version }}"
+
+        echo ""
+        echo "✅ Upload completed!"
+        echo "📦 Package: $PACKAGE_NAME"
+        echo "🏷️  Version: $VERSION"
+        echo "🔗 PyPI URL: https://pypi.org/project/$PACKAGE_NAME/$VERSION/"
+
+    - name: Skip publish (version already exists)
+      if: steps.check_pypi.outputs.version_exists == 'true' && github.event.inputs.force == 'false'
+      run: |
+        echo "⚠️  Skipping publish - version ${{ steps.get_version.outputs.version }} already exists on PyPI"
+        echo ""
+        echo "If you need to update this version:"
+        echo "1. Increment the version in pyproject.toml"
+        echo "2. Create a new GitHub release with the new version tag"
+        echo "3. OR run this workflow manually with 'force' option checked"
+        echo ""
+        echo "Current version cannot be overwritten for security reasons."
