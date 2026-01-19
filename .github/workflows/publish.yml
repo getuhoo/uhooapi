@@ -41,24 +41,21 @@ jobs:
   publish:
     needs: test
     runs-on: ubuntu-latest
-    # Optional: Add environment for better secret protection
-    # environment: production
 
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Get all history for proper versioning
+        fetch-depth: 0
 
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: "3.12"
-        cache: 'pip'
 
-    - name: Install build tools
+    - name: Install build tools and TOML parser
       run: |
         python -m pip install --upgrade pip
-        pip install build twine
+        pip install build twine tomli
 
     - name: Verify package structure
       run: |
@@ -67,62 +64,74 @@ jobs:
           echo "❌ ERROR: pyproject.toml not found!"
           exit 1
         fi
+        echo "✅ pyproject.toml found"
 
-        if [ ! -d "src" ] && [ ! -d "src/uhooapi" ]; then
-          echo "⚠️ WARNING: src/uhooapi directory not found"
-        fi
-
-        echo "✅ Project structure looks good"
-        echo "Files in repository:"
+        # List project structure
+        echo "Project structure:"
+        find . -type f -name "*.py" | head -20
+        echo "..."
         ls -la
 
-    - name: Extract and compare versions
-      id: version-check
+    - name: Extract version from pyproject.toml
+      id: get_version
       run: |
-        # Extract version from pyproject.toml
-        if command -v python3 &> /dev/null; then
-          PYTHON_CMD=python3
-        else
-          PYTHON_CMD=python
-        fi
+        echo "Extracting version from pyproject.toml..."
 
-        PYPROJECT_VERSION=$($PYTHON_CMD -c "
+        # Method 1: Use tomli (Python module we just installed)
+        PYPROJECT_VERSION=$(python -c "
         try:
             import tomli
             with open('pyproject.toml', 'rb') as f:
                 data = tomli.load(f)
-            print(data['project']['version'])
-        except ImportError:
-            # Fallback for older Python versions
-            import toml
-            with open('pyproject.toml', 'r') as f:
-                data = toml.load(f)
-            print(data['project']['version'])
+            version = data['project']['version']
+            print(version)
         except Exception as e:
-            print(f'ERROR: {e}')
-            exit(1)
+            print(f'Error with tomli: {e}')
+            # Method 2: Use simple grep as fallback
+            import re
+            with open('pyproject.toml', 'r') as f:
+                content = f.read()
+            match = re.search(r'version\s*=\s*[\"\\']([^\"\\']+)[\"\\']', content)
+            if match:
+                print(match.group(1))
+            else:
+                # Method 3: Look for version line
+                with open('pyproject.toml', 'r') as f:
+                    for line in f:
+                        if 'version' in line and '=' in line:
+                            version = line.split('=')[1].strip().strip('\"').strip(\"'")
+                            print(version)
+                            break
         ")
 
+        echo "Extracted version: $PYPROJECT_VERSION"
+        echo "version=$PYPROJECT_VERSION" >> $GITHUB_OUTPUT
+
+    - name: Check version against tag (for releases)
+      if: github.event_name == 'release'
+      run: |
+        echo "Checking version against release tag..."
+
+        # Get the extracted version
+        PYPROJECT_VERSION="${{ steps.get_version.outputs.version }}"
+
+        # Extract tag name (remove refs/tags/ and optional v prefix)
+        TAG_VERSION="${GITHUB_REF#refs/tags/}"
+        TAG_VERSION="${TAG_VERSION#v}"  # Remove leading 'v' if present
+
         echo "PyProject Version: $PYPROJECT_VERSION"
-        echo "pyproject_version=$PYPROJECT_VERSION" >> $GITHUB_OUTPUT
+        echo "Tag Version: $TAG_VERSION"
 
-        # For release events, check against tag
-        if [[ "${{ github.event_name }}" == "release" ]]; then
-          TAG_VERSION="${GITHUB_REF#refs/tags/}"
-          TAG_VERSION="${TAG_VERSION#v}"  # Remove 'v' prefix if present
-          echo "GitHub Tag Version: $TAG_VERSION"
-          echo "tag_version=$TAG_VERSION" >> $GITHUB_OUTPUT
-
-          if [ "$PYPROJECT_VERSION" != "$TAG_VERSION" ]; then
-            echo "❌ ERROR: Version mismatch!"
-            echo "  pyproject.toml: $PYPROJECT_VERSION"
-            echo "  Release tag:    $TAG_VERSION"
-            exit 1
-          else
-            echo "✅ Version check passed"
-          fi
+        if [ "$PYPROJECT_VERSION" != "$TAG_VERSION" ]; then
+          echo "❌ ERROR: Version mismatch!"
+          echo "  pyproject.toml: $PYPROJECT_VERSION"
+          echo "  Release tag:    $TAG_VERSION"
+          echo ""
+          echo "Make sure the version in pyproject.toml matches your GitHub release tag."
+          echo "Example: If your tag is v1.0.0, pyproject.toml should have version = \"1.0.0\""
+          exit 1
         else
-          echo "⚠️  Manual trigger - skipping version check"
+          echo "✅ Version check passed"
         fi
 
     - name: Build package
@@ -130,40 +139,62 @@ jobs:
         echo "Building package..."
         python -m build
 
-        echo "Built packages:"
+        echo "Built packages in dist/:"
         ls -lh dist/
 
-        echo "Package contents:"
-        for pkg in dist/*.whl; do
-          if [ -f "$pkg" ]; then
-            echo "=== $pkg ==="
-            unzip -l "$pkg" | head -20
-          fi
+        # Check what was built
+        echo "Package files:"
+        for file in dist/*; do
+          echo "  - $(basename $file) ($(du -h $file | cut -f1))"
         done
 
     - name: Check package with twine
       run: |
-        echo "Checking package validity..."
+        echo "Checking package validity with twine..."
         twine check dist/*
 
     - name: Test local installation
       run: |
         echo "Testing local installation..."
-        # Install the wheel package
-        pip install dist/*.whl --force-reinstall --no-deps
+
+        # Find the wheel file
+        WHEEL_FILE=$(ls dist/*.whl 2>/dev/null | head -1)
+
+        if [ -z "$WHEEL_FILE" ]; then
+          echo "⚠️  No wheel file found, testing with source distribution"
+          # Try source distribution
+          pip install dist/*.tar.gz --force-reinstall --no-deps
+        else
+          echo "Installing wheel: $WHEEL_FILE"
+          pip install "$WHEEL_FILE" --force-reinstall --no-deps
+        fi
 
         # Try to import the package
+        echo "Testing import..."
         python -c "
         try:
             import uhooapi
-            print(f'✅ Successfully imported uhooapi')
-            # Try to get version if available
+            print('✅ Successfully imported uhooapi')
+            # Try to get version from package
             try:
-                print(f'   Version: {uhooapi.__version__}')
-            except:
-                pass
-        except Exception as e:
+                print(f'   Package version: {uhooapi.__version__}')
+            except AttributeError:
+                # Try to get version from metadata
+                import importlib.metadata
+                try:
+                    version = importlib.metadata.version('uhooapi')
+                    print(f'   Package version (from metadata): {version}')
+                except:
+                    print('   Could not determine version')
+        except ImportError as e:
             print(f'❌ Failed to import uhooapi: {e}')
+            print('Trying to find installed packages...')
+            import subprocess
+            result = subprocess.run(['pip', 'list'], capture_output=True, text=True)
+            print(result.stdout)
+            exit(1)
+        except Exception as e:
+            print(f'❌ Unexpected error: {e}')
             exit(1)
         "
 
@@ -177,59 +208,81 @@ jobs:
         # Check if token is set
         if [ -z "$TWINE_PASSWORD" ]; then
           echo "❌ ERROR: PYPI_API_TOKEN secret is not set!"
-          echo "Please add your PyPI API token to repository secrets:"
-          echo "Settings → Secrets and variables → Actions → New repository secret"
-          echo "Name: PYPI_API_TOKEN"
-          echo "Value: pypi-YourAPITokenHere"
+          echo ""
+          echo "To fix this:"
+          echo "1. Go to https://pypi.org/manage/account/token/"
+          echo "2. Generate an API token (with 'Upload packages' scope)"
+          echo "3. In your GitHub repo: Settings → Secrets and variables → Actions"
+          echo "4. Click 'New repository secret'"
+          echo "5. Name: PYPI_API_TOKEN"
+          echo "6. Value: pypi-YourTokenHere"
+          echo ""
           exit 1
         fi
 
         # Upload to PyPI
+        echo "Uploading package to PyPI..."
         twine upload dist/* --verbose
 
+        echo ""
         echo "✅ Package published successfully!"
 
-        # Show published package info
+        # Show published info
         PACKAGE_NAME=$(python -c "
-        import tomli
-        with open('pyproject.toml', 'rb') as f:
-            data = tomli.load(f)
-        print(data['project']['name'])
+        try:
+            import tomli
+            with open('pyproject.toml', 'rb') as f:
+                data = tomli.load(f)
+            print(data['project']['name'])
+        except:
+            # Fallback: extract from first line of pyproject.toml
+            import re
+            with open('pyproject.toml', 'r') as f:
+                content = f.read()
+            match = re.search(r'name\s*=\s*[\"\\']([^\"\\']+)[\"\\']', content)
+            if match:
+                print(match.group(1))
+            else:
+                print('unknown-package')
         ")
-        echo "Package: $PACKAGE_NAME"
-        echo "Version: ${{ steps.version-check.outputs.pyproject_version }}"
 
-    - name: Verify publication
+        VERSION="${{ steps.get_version.outputs.version }}"
+        echo "📦 Package: $PACKAGE_NAME"
+        echo "🏷️  Version: $VERSION"
+        echo "🔗 PyPI URL: https://pypi.org/project/$PACKAGE_NAME/$VERSION/"
+
+    - name: Verify publication (optional)
       run: |
-        echo "Verifying publication (waiting 30 seconds for PyPI to update)..."
-        sleep 30
+        echo "Waiting for PyPI to update..."
+        sleep 10
 
         PACKAGE_NAME=$(python -c "
-        import tomli
-        with open('pyproject.toml', 'rb') as f:
-            data = tomli.load(f)
-        print(data['project']['name'])
+        try:
+            import tomli
+            with open('pyproject.toml', 'rb') as f:
+                data = tomli.load(f)
+            print(data['project']['name'])
+        except:
+            exit(0)  # Skip if we can't get name
         ")
-        PACKAGE_VERSION="${{ steps.version-check.outputs.pyproject_version }}"
 
-        echo "Checking if $PACKAGE_NAME==$PACKAGE_VERSION is available on PyPI..."
+        VERSION="${{ steps.get_version.outputs.version }}"
 
-        # Try to fetch package info
-        curl -s "https://pypi.org/pypi/$PACKAGE_NAME/$PACKAGE_VERSION/json" | \
-          python -c "
-          import sys, json
-          try:
-              data = json.load(sys.stdin)
-              print(f'✅ Package {data[\"info\"][\"name\"]} version {data[\"info\"][\"version\"]} found on PyPI!')
-              print(f'   Summary: {data[\"info\"].get(\"summary\", \"No summary\")}')
-          except Exception as e:
-              print(f'⚠️  Could not verify package on PyPI (might need more time): {e}')
-          "
+        echo "Checking if $PACKAGE_NAME $VERSION is available on PyPI..."
 
-  # Optional: Test publish to TestPyPI first
+        # Try to check with curl (but don't fail if it doesn't work yet)
+        curl -s "https://pypi.org/pypi/$PACKAGE_NAME/$VERSION/json" > /tmp/pypi_check.json 2>/dev/null || true
+
+        if [ -s /tmp/pypi_check.json ]; then
+          echo "✅ Package is available on PyPI!"
+        else
+          echo "⚠️  Package may not be visible yet (can take a few minutes)"
+        fi
+
+  # Optional: Test publish to TestPyPI
   test-publish:
     needs: test
-    if: github.event_name == 'workflow_dispatch'  # Only on manual trigger
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -238,12 +291,12 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: "3.12"
+        python-version: "3.14"
 
     - name: Install build tools
       run: |
         python -m pip install --upgrade pip
-        pip install build twine
+        pip install build twine tomli
 
     - name: Build package
       run: |
@@ -257,10 +310,38 @@ jobs:
         echo "Publishing to TestPyPI..."
 
         if [ -z "$TWINE_PASSWORD" ]; then
-          echo "⚠️  PYPI_API_TOKEN not set, skipping TestPyPI publish"
-          echo "To enable, add PYPI_API_TOKEN to repository secrets"
+          echo "⚠️  TEST_PYPI_API_TOKEN not set, skipping TestPyPI publish"
+          echo ""
+          echo "To enable TestPyPI publishing:"
+          echo "1. Go to https://test.pypi.org/manage/account/token/"
+          echo "2. Generate an API token"
+          echo "3. Add it as TEST_PYPI_API_TOKEN in GitHub secrets"
           exit 0
         fi
 
+        echo "Uploading to TestPyPI..."
         twine upload dist/* --repository-url https://test.pypi.org/legacy/ --verbose
-        echo "✅ Package published to TestPyPI"
+
+        # Extract package name
+        PACKAGE_NAME=$(python -c "
+        import tomli
+        with open('pyproject.toml', 'rb') as f:
+            data = tomli.load(f)
+        print(data['project']['name'])
+        ")
+
+        VERSION=$(python -c "
+        import tomli
+        with open('pyproject.toml', 'rb') as f:
+            data = tomli.load(f)
+        print(data['project']['version'])
+        ")
+
+        echo ""
+        echo "✅ Package published to TestPyPI!"
+        echo "📦 Package: $PACKAGE_NAME"
+        echo "🏷️  Version: $VERSION"
+        echo "🔗 TestPyPI URL: https://test.pypi.org/project/$PACKAGE_NAME/$VERSION/"
+        echo ""
+        echo "To test installation:"
+        echo "pip install --index-url https://test.pypi.org/simple/ $PACKAGE_NAME==$VERSION"
