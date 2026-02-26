@@ -369,13 +369,9 @@ class TestClientGetLatestData:
             device = Device(sample_device_data)
             client.devices["UHOO12345"] = device
 
-            # The actual code will have UnboundLocalError because:
-            # 1. data_latest is None
-            # 2. The condition `if data_latest is not None:` is false
-            # 3. So `data` is never defined
-            # 4. Then `device_obj.update_data(data)` tries to use undefined `data`
-            with pytest.raises(UnboundLocalError):
-                await client.get_latest_data("UHOO12345")
+            # When data_latest is None, data defaults to [] and user_settings to {}
+            await client.get_latest_data("UHOO12345")
+            device.update_data([], {})
 
     @pytest.mark.asyncio
     async def test_get_latest_data_empty_data_points(

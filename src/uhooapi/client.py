@@ -94,9 +94,11 @@ class Client:
             LOGGER.error(
                 "[client get_latest_data], no serial number saved to setup devices"
             )
+        data: list = []
+        user_settings: dict[str, str] = {}
         if data_latest is not None:
-            data: list = data_latest["data"]
-            user_settings: dict[str, str] = data_latest["usersettings"]
+            data = data_latest["data"]
+            user_settings = data_latest["usersettings"]
         device_obj: Device = self.devices[serial_number]
         device_obj.update_data(data, user_settings)
 

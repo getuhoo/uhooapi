@@ -33,11 +33,11 @@ class TestDeviceInitialization:
         assert device.utc_offset == ""
         assert device.ssid == ""
 
-        # Sensor fields should be initialized to 0.0
-        assert device.virus_index == 0.0
-        assert device.mold_index == 0.0
-        assert device.temperature == 0.0
-        assert device.humidity == 0.0
+        # Sensor fields should be initialized to None
+        assert device.virus_index is None
+        assert device.mold_index is None
+        assert device.temperature is None
+        assert device.humidity is None
         assert device.timestamp == -1
 
     def test_device_init_with_data(self):
@@ -173,10 +173,10 @@ class TestDeviceDataUpdate:
 
         device.update_data(data_points, _USER_SETTINGS)
 
-        # Temperature: (20.0 + 22.0 + 0.0) / 3 = 14.0
-        # Humidity: (40.0 + 0.0 + 50.0) / 3 = 30.0
-        assert device.temperature == 14.0
-        assert device.humidity == 30.0
+        # Temperature: (20.0 + 22.0) / 2 = 21.0 (missing values excluded)
+        # Humidity: (40.0 + 50.0) / 2 = 45.0 (missing values excluded)
+        assert device.temperature == 21.0
+        assert device.humidity == 45.0
 
     def test_update_data_sets_timestamp(self):
         """Test that update_data sets the timestamp from the last data point."""
@@ -257,5 +257,5 @@ class TestDeviceAttributeNames:
         for field in Device.SENSOR_FIELDS:
             attr_name = device._to_attr_name(field)
             assert hasattr(device, attr_name)
-            # Initial value should be 0.0
-            assert getattr(device, attr_name) == 0.0
+            # Initial value should be None (unavailable)
+            assert getattr(device, attr_name) is None
