@@ -9,6 +9,7 @@ class Device:
     SENSOR_FIELDS = [
         "virusIndex",
         "moldIndex",
+        "influenzaIndex",
         "temperature",
         "humidity",
         "pm25",
@@ -34,6 +35,7 @@ class Device:
     # Add type hints for ALL sensor fields
     virus_index: float | None
     mold_index: float | None
+    influenza_index: float | None
     temperature: float | None
     humidity: float | None
     pm25: float | None
@@ -109,3 +111,15 @@ class Device:
         # Optionally use the latest timestamp
         self.timestamp = data_points[-1].get("timestamp", -1)
         self.user_settings = user_settings
+
+    def __repr__(self) -> str:
+        """Return a readable representation of the Device."""
+        sensors = {
+            self._to_attr_name(f): getattr(self, self._to_attr_name(f))
+            for f in self.SENSOR_FIELDS
+            if getattr(self, self._to_attr_name(f)) is not None
+        }
+        return (
+            f"Device(name={self.device_name!r}, serial={self.serial_number!r}, "
+            f"sensors={sensors}, timestamp={self.timestamp})"
+        )

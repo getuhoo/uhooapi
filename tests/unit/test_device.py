@@ -200,6 +200,7 @@ class TestDeviceDataUpdate:
             {
                 "virusIndex": 2.5,
                 "moldIndex": 1.8,
+                "influenzaIndex": 3.0,
                 "temperature": 22.5,
                 "humidity": 45.0,
                 "pm25": 12.3,
@@ -228,6 +229,7 @@ class TestDeviceDataUpdate:
         # Check a few fields
         assert device.virus_index == 2.5
         assert device.mold_index == 1.8
+        assert device.influenza_index == 3.0
         assert device.temperature == 22.5
         assert device.humidity == 45.0
         assert device.pm25 == 12.3
@@ -245,6 +247,7 @@ class TestDeviceAttributeNames:
 
         # Test camelCase to snake_case conversion
         assert device._to_attr_name("virusIndex") == "virus_index"
+        assert device._to_attr_name("influenzaIndex") == "influenza_index"
         assert device._to_attr_name("pm25") == "pm25"  # No conversion needed
         assert device._to_attr_name("airPressure") == "air_pressure"
         assert device._to_attr_name("deviceName") == "device_name"
