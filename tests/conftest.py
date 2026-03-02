@@ -43,6 +43,7 @@ def sample_sensor_data():
             {
                 "virusIndex": 2.5,
                 "moldIndex": 1.8,
+                "influenzaIndex": 3.0,
                 "temperature": 22.5,
                 "humidity": 45.0,
                 "pm25": 12.3,
@@ -68,6 +69,7 @@ def sample_sensor_data():
             {
                 "virusIndex": 2.6,
                 "moldIndex": 1.9,
+                "influenzaIndex": 3.1,
                 "temperature": 22.6,
                 "humidity": 45.5,
                 "pm25": 12.5,

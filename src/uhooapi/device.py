@@ -9,6 +9,7 @@ class Device:
     SENSOR_FIELDS = [
         "virusIndex",
         "moldIndex",
+        "influenzaIndex",
         "temperature",
         "humidity",
         "pm25",
@@ -32,17 +33,18 @@ class Device:
     ]
 
     # Add type hints for ALL sensor fields
-    virus_index: float
-    mold_index: float
-    temperature: float
-    humidity: float
-    pm25: float
-    tvoc: float
-    co2: float
-    co: float
-    air_pressure: float
-    ozone: float
-    no2: float
+    virus_index: float | None
+    mold_index: float | None
+    influenza_index: float | None
+    temperature: float | None
+    humidity: float | None
+    pm25: float | None
+    tvoc: float | None
+    co2: float | None
+    co: float | None
+    air_pressure: float | None
+    ozone: float | None
+    no2: float | None
 
     def __init__(self, device: dict) -> None:
         """Initialize Device."""
@@ -57,9 +59,9 @@ class Device:
         self.ssid: str = ""
         self.user_settings: dict[str, str] = {"temp": "c"}  # default to celsius
 
-        # Sensor averages (initialized to 0.0)
+        # Sensor values (initialized to None = unavailable)
         for field in self.SENSOR_FIELDS:
-            setattr(self, self._to_attr_name(field), 0.0)
+            setattr(self, self._to_attr_name(field), None)
         self.timestamp: int = -1
 
         self.update_device(device)
@@ -81,23 +83,43 @@ class Device:
 
     def update_data(self, data_points: list, user_settings: dict[str, str]) -> None:
         """Update sensor data."""
-        if not data_points:
-            return  # No data to process
+        if len(data_points) == 0:
+            for field in self.SENSOR_FIELDS:
+                setattr(self, self._to_attr_name(field), None)  # unavailable
+                self.timestamp = -1  # default timestamp
+                self.user_settings = user_settings
+            return
 
-        # Compute averages
-        n = len(data_points)
-        sums = dict.fromkeys(self.SENSOR_FIELDS, 0.0)
+        # Compute averages (only over entries with valid values)
+        sums: dict[str, float] = dict.fromkeys(self.SENSOR_FIELDS, 0.0)
+        counts: dict[str, int] = dict.fromkeys(self.SENSOR_FIELDS, 0)
         for entry in data_points:
             for field in self.SENSOR_FIELDS:
                 value = entry.get(field)
                 if isinstance(value, (int, float)):
                     sums[field] += value
+                    counts[field] += 1
 
-        # Assign averages to class attributes
+        # Assign averages to class attributes (None if no valid data)
         for field in self.SENSOR_FIELDS:
-            avg = sums[field] / n
-            setattr(self, self._to_attr_name(field), round(avg, 1))
+            if counts[field] > 0:
+                avg = sums[field] / counts[field]
+                setattr(self, self._to_attr_name(field), round(avg, 1))
+            else:
+                setattr(self, self._to_attr_name(field), None)
 
         # Optionally use the latest timestamp
         self.timestamp = data_points[-1].get("timestamp", -1)
         self.user_settings = user_settings
+
+    def __repr__(self) -> str:
+        """Return a readable representation of the Device."""
+        sensors = {
+            self._to_attr_name(f): getattr(self, self._to_attr_name(f))
+            for f in self.SENSOR_FIELDS
+            if getattr(self, self._to_attr_name(f)) is not None
+        }
+        return (
+            f"Device(name={self.device_name!r}, serial={self.serial_number!r}, "
+            f"sensors={sensors}, timestamp={self.timestamp})"
+        )

@@ -33,11 +33,11 @@ class TestDeviceInitialization:
         assert device.utc_offset == ""
         assert device.ssid == ""
 
-        # Sensor fields should be initialized to 0.0
-        assert device.virus_index == 0.0
-        assert device.mold_index == 0.0
-        assert device.temperature == 0.0
-        assert device.humidity == 0.0
+        # Sensor fields should be initialized to None
+        assert device.virus_index is None
+        assert device.mold_index is None
+        assert device.temperature is None
+        assert device.humidity is None
         assert device.timestamp == -1
 
     def test_device_init_with_data(self):
@@ -173,10 +173,10 @@ class TestDeviceDataUpdate:
 
         device.update_data(data_points, _USER_SETTINGS)
 
-        # Temperature: (20.0 + 22.0 + 0.0) / 3 = 14.0
-        # Humidity: (40.0 + 0.0 + 50.0) / 3 = 30.0
-        assert device.temperature == 14.0
-        assert device.humidity == 30.0
+        # Temperature: (20.0 + 22.0) / 2 = 21.0 (missing values excluded)
+        # Humidity: (40.0 + 50.0) / 2 = 45.0 (missing values excluded)
+        assert device.temperature == 21.0
+        assert device.humidity == 45.0
 
     def test_update_data_sets_timestamp(self):
         """Test that update_data sets the timestamp from the last data point."""
@@ -200,6 +200,7 @@ class TestDeviceDataUpdate:
             {
                 "virusIndex": 2.5,
                 "moldIndex": 1.8,
+                "influenzaIndex": 3.0,
                 "temperature": 22.5,
                 "humidity": 45.0,
                 "pm25": 12.3,
@@ -228,6 +229,7 @@ class TestDeviceDataUpdate:
         # Check a few fields
         assert device.virus_index == 2.5
         assert device.mold_index == 1.8
+        assert device.influenza_index == 3.0
         assert device.temperature == 22.5
         assert device.humidity == 45.0
         assert device.pm25 == 12.3
@@ -245,6 +247,7 @@ class TestDeviceAttributeNames:
 
         # Test camelCase to snake_case conversion
         assert device._to_attr_name("virusIndex") == "virus_index"
+        assert device._to_attr_name("influenzaIndex") == "influenza_index"
         assert device._to_attr_name("pm25") == "pm25"  # No conversion needed
         assert device._to_attr_name("airPressure") == "air_pressure"
         assert device._to_attr_name("deviceName") == "device_name"
@@ -257,5 +260,5 @@ class TestDeviceAttributeNames:
         for field in Device.SENSOR_FIELDS:
             attr_name = device._to_attr_name(field)
             assert hasattr(device, attr_name)
-            # Initial value should be 0.0
-            assert getattr(device, attr_name) == 0.0
+            # Initial value should be None (unavailable)
+            assert getattr(device, attr_name) is None

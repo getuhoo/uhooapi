@@ -1,5 +1,12 @@
 # Changelog
 
+
+## [1.2.7] - 2026-03-02
+
+### Changes
+- 4bc4723 feat: add new influenza field
+- 02764d9 feat: add device defaults to none
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
