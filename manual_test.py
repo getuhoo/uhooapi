@@ -6,7 +6,7 @@ from uhooapi.client import Client
 async def main():
     async with aiohttp.ClientSession() as session:
         client = Client(
-            api_key="84e585f7d3ba165616924d7f868c2edddb7cc536831b027d",
+            api_key="YOUR_API_KEY_HERE",
             websession=session,
         )
         await client.login()
