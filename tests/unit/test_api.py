@@ -236,7 +236,7 @@ class TestAPIMethods:
             mock_request.assert_called_once_with(
                 "post",
                 "https://api.uhooinc.com/integration",
-                "devicedata",
+                "getdata",
                 data={"serialNumber": "UHOO12345", "mode": "minute", "limit": 5},
             )
             assert result == mock_response
