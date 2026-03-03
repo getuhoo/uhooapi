@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [1.2.8] - 2026-03-03
+
+### Changes
+- b90994d refactor: change api endpoint to getdata
+
+
 ## [1.2.7] - 2026-03-02
 
 ### Changes
